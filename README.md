@@ -1,6 +1,6 @@
 # blog_be
 
-`blog_ui` (Next.js)의 백엔드. FastAPI + PostgreSQL + async SQLAlchemy 기반.
+FastAPI + PostgreSQL + async SQLAlchemy based backend service.
 
 ## Stack
 
@@ -52,9 +52,7 @@ app/
   core/      # config, db, exception, security, utils
   post/      # domain / application / infrastructure
   tag/
-seed/        # fixtures import
 tests/
-docs/contract/  # FE 계약 문서 (BACKEND.md, fixtures.ts, index.ts)
 ```
 
 ## Env files
