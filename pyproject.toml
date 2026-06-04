@@ -1,0 +1,80 @@
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+    "N",
+    "SIM",
+    "ANN",
+    "S",
+    "PT",
+    "ASYNC",
+    "RUF",
+    "RET",
+    "TRY",
+    "PTH",
+    "PERF",
+    "LOG",
+    "G",
+    "ARG",
+    "T20",
+    "ERA",
+]
+
+ignore = [
+    "ANN401",
+    "S101",
+    "N818",
+    "B008",
+    "TRY003",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S105",
+    "S106",
+    "ANN",
+]
+"seed/**/*.py" = [
+    "E501",
+    "T201",
+]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "fastapi.*",
+    "uvicorn.*",
+    "slugify.*",
+]
+ignore_missing_imports = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = [
+    "integration: requires TEST_DATABASE_URL pointing at an external Postgres",
+]

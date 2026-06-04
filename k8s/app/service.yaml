@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: blog-app
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: blog-app
+    app.kubernetes.io/part-of: blog
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: blog-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

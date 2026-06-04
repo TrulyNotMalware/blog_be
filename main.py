@@ -1,0 +1,30 @@
+import os
+
+import click
+import uvicorn
+
+from app.core.config.config import loader
+
+
+@click.command()
+@click.option(
+    "--env",
+    type=click.Choice(["prod", "dev", "local"], case_sensitive=False),
+    default="local",
+)
+@click.option("--debug", type=click.BOOL, is_flag=True, default=False)
+def main(env: str, debug: bool) -> None:
+    os.environ["ENV"] = env
+    os.environ["DEBUG"] = str(debug)
+
+    uvicorn.run(
+        app="app.server:app",
+        host=loader.config.APP_HOST,
+        port=loader.config.APP_PORT,
+        reload=env != "prod",
+        workers=1 if env != "prod" else loader.config.WORKERS,
+    )
+
+
+if __name__ == "__main__":
+    main()

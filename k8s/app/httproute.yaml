@@ -1,0 +1,45 @@
+# ⚠️ DO NOT APPLY — reference only (excluded from kustomization.yaml).
+# This routes the API hostname straight to blog_be, bypassing the Spring Cloud Gateway.
+# blog_be enforces hop-proof (X-Gateway-Auth), so a direct route makes every request fail
+# with 401 GATEWAY_HOP_MISSING. Route the API hostname to the gateway instead — see
+# gateway/src/main/resources/k8s/httproute.yaml (api.<domain> -> api-gateway-svc:80).
+#
+# Attach to your existing Gateway. Replace the parentRefs / hostnames below.
+#
+# Prerequisites the cluster operator already owns:
+#   - A `Gateway` with at least one listener (typically HTTPS:443 with TLS cert).
+#   - If the Gateway lives in a different namespace, either:
+#       (a) the Gateway's `allowedRoutes.namespaces.from: All`, or
+#       (b) a `ReferenceGrant` in the Gateway's namespace permitting routes from `blog`.
+#   - DNS pointing the hostname at the Gateway's address.
+#
+# Optional sibling resources you might want next to this file:
+#   - `BackendTLSPolicy` to force TLS to the backend (rarely needed for in-cluster app)
+#   - Implementation-specific filter CRD for body-size / timeouts (was the nginx
+#     annotations on the old Ingress); e.g. Envoy Gateway has `BackendTrafficPolicy`,
+#     kgateway has `RouteOption`, etc. Not portable across implementations.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: blog-app
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: blog-app
+    app.kubernetes.io/part-of: blog
+spec:
+  parentRefs:
+    - name: REPLACE_ME_gateway_name
+      namespace: REPLACE_ME_gateway_namespace
+      # Omit `sectionName` to attach to all listeners on the Gateway.
+      # Set it (e.g. `https`) to attach to a single named listener.
+      sectionName: https
+  hostnames:
+    - api.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: blog-app
+          port: 8080

@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: blog-app
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: blog-app
+    app.kubernetes.io/part-of: blog
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: blog-app

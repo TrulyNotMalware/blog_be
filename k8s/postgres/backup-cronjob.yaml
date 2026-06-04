@@ -1,0 +1,84 @@
+# Daily pg_dump to a PVC. To ship to S3/R2/GCS instead, swap the volume with a
+# sidecar that uploads, or use a tool like wal-g. This is the "good enough" baseline.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/part-of: blog
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/part-of: blog
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+          containers:
+            - name: pg-dump
+              image: postgres:18
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - secretRef:
+                    name: blog-postgres-secret
+              env:
+                - name: PGHOST
+                  value: postgres.blog.svc.cluster.local
+              command:
+                - sh
+                - -c
+                - |
+                  set -euo pipefail
+                  ts=$(date -u +"%Y%m%dT%H%M%SZ")
+                  out="/backup/blog-${ts}.sql.gz"
+                  PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
+                    -h "$PGHOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+                    --no-owner --no-privileges \
+                    | gzip -9 > "$out"
+                  echo "wrote $out"
+                  # Retain the latest 14 dumps.
+                  ls -1t /backup/blog-*.sql.gz | tail -n +15 | xargs -r rm -f
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: postgres-backup

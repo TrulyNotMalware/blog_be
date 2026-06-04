@@ -1,0 +1,49 @@
+# One-shot. Run after the initial migrate. Idempotent (skips existing rows).
+#   kubectl -n blog delete job seed --ignore-not-found
+#   kubectl -n blog apply -f k8s/app/seed-job.yaml
+#   kubectl -n blog wait --for=condition=complete job/seed --timeout=120s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: blog-seed
+    app.kubernetes.io/part-of: blog
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: blog-seed
+        app.kubernetes.io/part-of: blog
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: seed
+          image: ghcr.io/REPLACE_ME_owner/blog-be:0.1.0
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "seed.fixtures"]
+          envFrom:
+            - configMapRef:
+                name: blog-app-config
+            - secretRef:
+                name: blog-app-secret
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

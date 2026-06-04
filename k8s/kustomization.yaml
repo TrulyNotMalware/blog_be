@@ -1,0 +1,27 @@
+# `kubectl apply -k k8s/` installs everything *except* the one-shot Jobs.
+# Apply migration-job.yaml and seed-job.yaml separately as part of your release flow.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: blog
+
+commonLabels:
+  app.kubernetes.io/part-of: blog
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.example.yaml
+  - postgres/secret.example.yaml
+  - postgres/service.yaml
+  - postgres/statefulset.yaml
+  - postgres/backup-cronjob.yaml
+  - app/service.yaml
+  - app/deployment.yaml
+  # app/httproute.yaml intentionally excluded: blog_be must be reached ONLY through the
+  # Spring Cloud Gateway (hop-proof enforced). Exposing it directly via an HTTPRoute would
+  # make every request fail with 401 GATEWAY_HOP_MISSING. The API hostname is routed to the
+  # gateway instead (gateway/src/main/resources/k8s/httproute.yaml).
+  - app/hpa.yaml
+  - app/pdb.yaml
+  - app/networkpolicy.yaml

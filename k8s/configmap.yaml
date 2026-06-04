@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blog-app-config
+  namespace: blog
+  labels:
+    app.kubernetes.io/name: blog-app
+    app.kubernetes.io/part-of: blog
+data:
+  ENV: "prod"
+  DEBUG: "false"
+  APP_HOST: "0.0.0.0"
+  APP_PORT: "8080"
+  WORKERS: "2"
+  # CORS / SecurityHeaders / RateLimit are handled by the gateway in prod. Kept here for non-prod compatibility.
+  CORS_ORIGINS: "https://blog.example.com"
+  # Signing algorithm is pinned to RS256 in code (app/core/config/config.py); not a ConfigMap knob.
+  JWT_ACCESS_EXPIRE_MINUTES: "15"
+  JWT_REFRESH_EXPIRE_MINUTES: "10080"
+  JWT_ISSUER: "blog-be"
+  # JWT signing key identifier. Increment when rotating JWT_PRIVATE_KEY_PEM.
+  JWT_KID: "v1"
+  ADMIN_USERNAME: "admin"
+  # GATEWAY_SHARED_SECRET and JWT_PRIVATE_KEY_PEM are injected via Secret (not ConfigMap)
