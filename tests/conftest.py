@@ -53,6 +53,12 @@ def _patch_test_rsa_keys(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    # `pytestmark` in a conftest.py does not mark tests, so apply the
+    # `integration` marker by path — this is what makes `-m integration` work.
+    integration_dir = "tests/integration/"
+    for item in items:
+        if integration_dir in str(item.path):
+            item.add_marker(pytest.mark.integration)
     if TEST_DATABASE_URL:
         return
     skip = pytest.mark.skip(reason="TEST_DATABASE_URL not set")
