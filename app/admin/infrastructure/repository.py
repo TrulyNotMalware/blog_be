@@ -1,16 +1,11 @@
 import datetime as dt
-from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.admin.domain.entity import Admin
 from app.admin.domain.refresh_token import RefreshToken
-from app.core.db.session import (
-    reset_session_context,
-    session,
-    set_session_context,
-)
+from app.core.db.session import session
 
 
 async def get_admin(username: str) -> Admin | None:
@@ -68,11 +63,26 @@ async def get_refresh_token(jti: str) -> RefreshToken | None:
     return result.scalar_one_or_none()
 
 
-async def mark_refresh_token_rotated(jti: str) -> None:
-    await session.execute(
-        update(RefreshToken).where(RefreshToken.jti == jti).values(status="rotated")
+async def claim_refresh_token_rotation(jti: str) -> bool:
+    """Atomically flip `active` → `rotated` for this jti, but only if it is still
+    active and unexpired. Returns True iff this call won the rotation.
+
+    The single `UPDATE ... WHERE status='active' RETURNING` makes rotation a
+    compare-and-set: two concurrent refreshes of the same token can't both
+    succeed (only one row gets returned), so single-use rotation + reuse
+    detection hold under concurrency. `expires_at > now()` is evaluated
+    server-side to avoid app/DB clock skew."""
+    result = await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.jti == jti,
+            RefreshToken.status == "active",
+            RefreshToken.expires_at > func.now(),
+        )
+        .values(status="rotated")
+        .returning(RefreshToken.jti)
     )
-    await session.flush()
+    return result.scalar_one_or_none() is not None
 
 
 async def revoke_refresh_tokens(subject: str) -> None:
@@ -83,30 +93,3 @@ async def revoke_refresh_tokens(subject: str) -> None:
         .values(status="revoked")
     )
     await session.flush()
-
-
-async def revoke_family_committed(subject: str) -> None:
-    """Bump token_version + revoke all refresh tokens in an INDEPENDENT committed
-    transaction.
-
-    Reuse detection performs this and then raises 401. Doing the writes in the
-    request's ambient `@Transactional()` would be rolled back by that raise, so
-    the family kill must commit on its own session scope (a fresh connection;
-    the caller's transaction only ran SELECTs, so no lock contention)."""
-    sid = str(uuid4())
-    ctx = set_session_context(sid)
-    try:
-        async with session.begin():
-            await session.execute(
-                update(Admin)
-                .where(Admin.username == subject)
-                .values(token_version=Admin.token_version + 1)
-            )
-            await session.execute(
-                update(RefreshToken)
-                .where(RefreshToken.subject == subject)
-                .values(status="revoked")
-            )
-    finally:
-        await session.remove()
-        reset_session_context(ctx)

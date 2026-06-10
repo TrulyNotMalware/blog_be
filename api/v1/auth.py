@@ -6,16 +6,16 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 from app.admin.infrastructure.repository import (
+    claim_refresh_token_rotation,
     get_admin,
     get_refresh_token,
     increment_token_version,
-    mark_refresh_token_rotated,
     record_refresh_token,
-    revoke_family_committed,
     revoke_refresh_tokens,
     upsert_admin,
 )
 from app.core.config.config import loader
+from app.core.db.session import session
 from app.core.db.transactional import Transactional
 from app.core.exception.error_base import Unauthorized
 from app.core.security.auth import (
@@ -79,44 +79,53 @@ async def login(payload: LoginRequest) -> TokenPair:
 
 
 @router.post("/refresh", response_model=TokenPair, response_model_by_alias=True)
-@Transactional()
 async def refresh(payload: RefreshRequest) -> TokenPair:
     """Rotate tokens with reuse detection.
 
     The refresh token must still match the current `admins.token_version`
-    (logout / password change invalidates both). Beyond that, the presented
-    jti is looked up:
-      - unknown / revoked / expired -> 401.
+    (logout / password change invalidates both). Then the presented jti is
+    rotated via an atomic compare-and-set:
+      - `active` (unexpired) -> won the rotation: persist the new jti, issue a
+        fresh pair.
       - already `rotated` -> REUSE DETECTED: a token already exchanged once is
         being replayed. Bump token_version (kills the whole access+refresh
-        family, forcing re-login) and revoke all of this subject's refresh
-        tokens. 401.
-      - `active` -> rotate: mark old jti `rotated`, persist the new jti, issue
-        a fresh pair.
-    Rotate + insert + reuse-revoke all run in this one @Transactional() so the
-    family state stays atomic.
+        family) and revoke this subject's refresh tokens, then 401.
+      - unknown / revoked / expired -> 401.
+
+    The whole thing runs in one explicit transaction (not @Transactional) so the
+    reuse-revocation can be COMMITTED before we raise 401 — @Transactional would
+    roll it back. The single-connection commit also avoids the pool-starvation
+    risk of opening a second session just to persist the kill.
     """
     subject, tv, jti = verify_refresh_token(payload.refresh_token)
 
-    admin = await get_admin(subject)
-    if admin is None or admin.token_version != tv:
-        raise Unauthorized("Token has been revoked")
+    reuse_detected = False
+    new_refresh: str | None = None
+    async with session.begin():
+        admin = await get_admin(subject)
+        if admin is None or admin.token_version != tv:
+            raise Unauthorized("Token has been revoked")  # read-only → rollback ok
 
-    row = await get_refresh_token(jti)
-    if row is None or row.status == "revoked":
-        raise Unauthorized("Token has been revoked")
-    if row.status == "rotated":
-        # Replay of an already-rotated token — treat as theft, kill the family.
-        # Commit the kill independently: this request's @Transactional() would
-        # otherwise roll it back when we raise 401 below.
-        await revoke_family_committed(subject)
+        if await claim_refresh_token_rotation(jti):
+            new_refresh, new_jti = issue_refresh_token(subject, tv)
+            await record_refresh_token(new_jti, subject, _refresh_expires_at())
+        else:
+            # Didn't win the claim: an already-`rotated` jti is a replay (theft) →
+            # kill the family and COMMIT (don't raise inside the block), then 401
+            # outside. Anything else (unknown / revoked / expired-active) is a
+            # plain 401 with no writes.
+            row = await get_refresh_token(jti)
+            if row is not None and row.status == "rotated":
+                await increment_token_version(subject)
+                await revoke_refresh_tokens(subject)
+                reuse_detected = True
+            else:
+                raise Unauthorized("Token has been revoked")
+
+    if reuse_detected:
         raise Unauthorized("Token reuse detected")
-    if row.expires_at <= datetime.now(tz=UTC):
-        raise Unauthorized("Token has been revoked")
 
-    await mark_refresh_token_rotated(jti)
-    new_refresh, new_jti = issue_refresh_token(subject, tv)
-    await record_refresh_token(new_jti, subject, _refresh_expires_at())
+    assert new_refresh is not None  # claim succeeded → set; reuse path returned above
     return TokenPair(
         access_token=issue_access_token(subject, tv),
         refresh_token=new_refresh,
