@@ -19,6 +19,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 # Side-effect imports — register ORM mappings on Base.metadata.
 import app.admin.domain.entity
+import app.content.domain.entity
 import app.post.domain.entity
 import app.tag.domain.entity  # noqa: F401
 from api.root_router import root_router

@@ -29,6 +29,13 @@ class Unauthorized(CustomException):
         super().__init__(ErrorCode.UNAUTHORIZED, message, 401)
 
 
+class ContentNotFound(CustomException):
+    def __init__(self, key: str) -> None:
+        super().__init__(
+            ErrorCode.CONTENT_NOT_FOUND, f"Content not found: {key}", 404
+        )
+
+
 class Forbidden(CustomException):
     def __init__(self, message: str = "Insufficient permissions") -> None:
         super().__init__(ErrorCode.FORBIDDEN, message, 403)
