@@ -42,3 +42,4 @@ htmlcov/
 seed/
 /k8s-local/
 scripts/
+DEPLOY.md
