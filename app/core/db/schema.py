@@ -2,6 +2,7 @@
 before delegating to `init_tables()` on the writer engine."""
 
 import app.admin.domain.entity
+import app.admin.domain.refresh_token
 import app.content.domain.entity
 import app.post.domain.entity
 import app.tag.domain.entity  # noqa: F401 — registers Tag on Base.metadata

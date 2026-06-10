@@ -17,9 +17,14 @@ TokenType = Literal["access", "refresh"]
 
 def _issue(
     subject: str, token_version: int, *, kind: TokenType, ttl_minutes: int
-) -> str:
+) -> tuple[str, str]:
+    """Encode a token. Returns (encoded_token, jti)."""
     cfg = loader.config
     now = datetime.now(tz=UTC)
+    # Random jti ensures each issuance is byte-unique even within the same
+    # second (rotation tests, rapid refresh). For refresh tokens this is
+    # persisted and validated server-side to enable rotation + reuse detection.
+    jti = uuid4().hex
     payload: dict[str, Any] = {
         "sub": subject,
         "iss": cfg.JWT_ISSUER,
@@ -28,29 +33,29 @@ def _issue(
         "exp": int((now + timedelta(minutes=ttl_minutes)).timestamp()),
         "tv": token_version,
         "typ": kind,
-        # Random jti ensures each issuance is byte-unique even within the same
-        # second (rotation tests, rapid refresh). Not validated server-side
-        # today — reserved for future per-token revocation.
-        "jti": uuid4().hex,
+        "jti": jti,
     }
-    return jwt.encode(
+    token = jwt.encode(
         payload,
         keys.private_key(),
         algorithm=JWT_ALGORITHM,
         headers={"kid": cfg.JWT_KID},
     )
+    return token, jti
 
 
 def issue_access_token(subject: str, token_version: int) -> str:
-    return _issue(
+    token, _ = _issue(
         subject,
         token_version,
         kind="access",
         ttl_minutes=loader.config.JWT_ACCESS_EXPIRE_MINUTES,
     )
+    return token
 
 
-def issue_refresh_token(subject: str, token_version: int) -> str:
+def issue_refresh_token(subject: str, token_version: int) -> tuple[str, str]:
+    """Issue a refresh token. Returns (token, jti) so callers can persist it."""
     return _issue(
         subject,
         token_version,
@@ -134,10 +139,23 @@ def _require_admin_from_header(request: Request) -> str:
     return user_id
 
 
-async def verify_refresh_token(token: str) -> tuple[str, int]:
-    """Decode and validate a refresh token. Returns (subject, current token_version)."""
+def verify_refresh_token(token: str) -> tuple[str, int, str]:
+    """Validate a refresh token's signature + claims (no DB access).
+
+    Returns (subject, token_version, jti). The caller checks `token_version`
+    against the DB and runs jti rotation / reuse detection inside its own
+    transaction — keeping that work atomic.
+    """
     payload = decode_token(token)
-    subject = await _verify_subject(payload, expected_type="refresh")
+    subject = payload.get("sub")
+    if not isinstance(subject, str) or subject != loader.config.ADMIN_USERNAME:
+        raise Forbidden()
+    if payload.get("typ") != "refresh":
+        raise Unauthorized("Wrong token type")
     tv = payload.get("tv")
-    assert isinstance(tv, int)  # _verify_subject already enforced
-    return subject, tv
+    if not isinstance(tv, int):
+        raise Unauthorized("Token missing version claim")
+    jti = payload.get("jti")
+    if not isinstance(jti, str):
+        raise Unauthorized("Token missing id claim")
+    return subject, tv, jti
