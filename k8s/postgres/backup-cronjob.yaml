@@ -41,7 +41,7 @@ spec:
             fsGroup: 999
           containers:
             - name: pg-dump
-              image: postgres:18
+              image: docker.io/library/postgres:18.4
               imagePullPolicy: IfNotPresent
               envFrom:
                 - secretRef:

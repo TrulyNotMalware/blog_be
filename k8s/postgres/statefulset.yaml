@@ -25,7 +25,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: postgres
-          image: postgres:18
+          image: docker.io/library/postgres:18.4
           imagePullPolicy: IfNotPresent
           ports:
             - name: postgres
