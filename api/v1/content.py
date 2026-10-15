@@ -18,7 +18,8 @@ ServiceDep = Annotated[ContentService, Depends(get_content_service)]
 
 
 def _validate_key(key: str) -> None:
-    if not _KEY_RE.match(key):
+    # fullmatch: with match(), `$` also matches before a trailing "\n".
+    if not _KEY_RE.fullmatch(key):
         raise CustomException(
             ErrorCode.VALIDATION_ERROR,
             f"Invalid content key: '{key}'. Must match ^[a-z0-9][a-z0-9_-]{{0,63}}$",

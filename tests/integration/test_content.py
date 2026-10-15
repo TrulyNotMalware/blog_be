@@ -1,5 +1,7 @@
 """Integration tests for GET/PUT /v1/content/{key}."""
 
+import datetime as dt
+
 from httpx import AsyncClient
 
 
@@ -43,8 +45,10 @@ async def test_put_updates_existing_content(
     assert r2.status_code == 200
     body2 = r2.json()
     assert body2["content"] == {"v": 2}
-    # updatedAt must be >= first (may be equal within same transaction second)
-    assert body2["updatedAt"] >= updated_at_1
+    # Separate transactions, so the upsert must move updatedAt forward.
+    assert dt.datetime.fromisoformat(body2["updatedAt"]) > dt.datetime.fromisoformat(
+        updated_at_1
+    )
 
 
 async def test_invalid_key_returns_422(client: AsyncClient) -> None:
@@ -59,6 +63,37 @@ async def test_oversized_content_returns_422(
     big = {"data": "x" * (64 * 1024 + 1)}
     r = await client.put(
         "/v1/content/about", json={"content": big}, headers=auth_headers
+    )
+    assert r.status_code == 422
+
+
+async def test_oversized_multibyte_content_returns_422(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    # 30,000 characters but ~90 KB of UTF-8: the limit counts bytes, not characters.
+    big = {"data": "가" * 30_000}
+    r = await client.put(
+        "/v1/content/about", json={"content": big}, headers=auth_headers
+    )
+    assert r.status_code == 422
+
+
+async def test_nan_content_returns_422(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    r = await client.put(
+        "/v1/content/about",
+        content='{"content": {"ratio": NaN}}',
+        headers={**auth_headers, "Content-Type": "application/json"},
+    )
+    assert r.status_code == 422
+
+
+async def test_key_with_trailing_newline_returns_422(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    r = await client.put(
+        "/v1/content/about%0A", json={"content": {}}, headers=auth_headers
     )
     assert r.status_code == 422
 

@@ -8,6 +8,7 @@ Integration tests live under `tests/integration/` and are skipped when
 """
 
 import os
+from collections.abc import AsyncIterator
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -76,7 +77,7 @@ def app() -> FastAPI:
 
 
 @pytest.fixture
-async def client(app: FastAPI) -> AsyncClient:
+async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c

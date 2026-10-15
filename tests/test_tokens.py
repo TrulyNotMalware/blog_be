@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -14,16 +14,20 @@ def test_decode_accepts_issued_access_token() -> None:
     assert decode_token(token)["sub"] == "admin"
 
 
-def test_decode_rejects_token_without_exp() -> None:
+@pytest.mark.parametrize("missing", ["exp", "iat", "sub"])
+def test_decode_rejects_token_without_required_claim(missing: str) -> None:
     cfg = loader.config
-    claims = {
+    now = datetime.now(tz=UTC)
+    claims: dict[str, object] = {
         "sub": "admin",
         "iss": cfg.JWT_ISSUER,
         "aud": cfg.JWT_AUDIENCE,
-        "iat": int(datetime.now(tz=UTC).timestamp()),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
         "tv": 1,
         "typ": "access",
     }
+    del claims[missing]
     token = jwt.encode(claims, keys.private_key(), algorithm=JWT_ALGORITHM)
     with pytest.raises(Unauthorized):
         decode_token(token)

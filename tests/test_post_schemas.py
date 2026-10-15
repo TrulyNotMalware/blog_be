@@ -13,6 +13,11 @@ def test_post_update_rejects_null_for_not_null_column(field: str) -> None:
         PostUpdate.model_validate({field: None})
 
 
+def test_post_update_rejects_empty_id() -> None:
+    with pytest.raises(ValidationError):
+        PostUpdate.model_validate({"id": ""})
+
+
 def test_post_update_allows_null_content() -> None:
     update = PostUpdate.model_validate({"content": None})
     assert update.model_dump(exclude_unset=True) == {"content": None}

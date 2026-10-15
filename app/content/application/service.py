@@ -23,7 +23,15 @@ class ContentService:
 
     @Transactional()
     async def upsert(self, key: str, content: dict[str, object]) -> ContentRead:
-        serialized = json.dumps(content, ensure_ascii=False)
+        try:
+            # The request parser accepts NaN/Infinity, but JSONB rejects them (500).
+            serialized = json.dumps(content, ensure_ascii=False, allow_nan=False)
+        except ValueError as exc:
+            raise CustomException(
+                ErrorCode.VALIDATION_ERROR,
+                "content must not contain NaN or Infinity",
+                422,
+            ) from exc
         if len(serialized.encode()) > _MAX_CONTENT_BYTES:
             raise CustomException(
                 ErrorCode.VALIDATION_ERROR,

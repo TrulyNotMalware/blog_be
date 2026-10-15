@@ -69,7 +69,8 @@ class PostCreate(_Camel):
 
 
 class PostUpdate(_Camel):
-    id: str | None = None
+    # "" would rename the post to an id no /posts/{id} route can reach.
+    id: str | None = Field(default=None, min_length=1)
     title: str | None = None
     excerpt: str | None = None
     content: str | None = None

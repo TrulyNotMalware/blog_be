@@ -51,6 +51,9 @@ class TagRepository:
 
     async def ensure(self, names: Sequence[str]) -> Sequence[Tag]:
         """Return Tag rows for every name, creating any that are missing."""
+        # Names repeat after normalization ("Python", "python"); a repeated new
+        # name would be inserted twice and fail on the primary key.
+        names = list(dict.fromkeys(names))
         if not names:
             return []
         existing = list(await self.get_many(names))

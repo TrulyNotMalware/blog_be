@@ -61,6 +61,26 @@ async def test_nav_middle_post_has_both(
     assert body["next"]["id"] == "c"
 
 
+async def test_nav_same_date_follows_list_order(
+    client: AsyncClient,
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    """Same date: the list is ordered by id ascending ([a, b, c]), so for b the
+    older neighbour (prev, later in the list) is c and the newer one is a."""
+    day = dt.date(2026, 1, 1)
+    await insert(
+        make_post(id="a", date=day),
+        make_post(id="b", date=day),
+        make_post(id="c", date=day),
+    )
+    r = await client.get("/v1/posts/b/nav")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["prev"]["id"] == "c"
+    assert body["next"]["id"] == "a"
+
+
 async def test_nav_draft_returns_404(
     client: AsyncClient,
     insert: _Insert,
