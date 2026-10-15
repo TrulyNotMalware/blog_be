@@ -12,6 +12,7 @@ spec:
     kind: Deployment
     name: blog-app
   minReplicas: 2
+  # The DB connection budget in configmap.yaml (DB_POOL_SIZE) assumes at most 6.
   maxReplicas: 6
   metrics:
     - type: Resource

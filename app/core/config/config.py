@@ -29,6 +29,20 @@ class Config(BaseSettings):
     WORKERS: int = 1
 
     DATABASE_URL: str = "postgresql+asyncpg://blog:blog@localhost:5432/blog"
+    # Connections per worker process. (DB_POOL_SIZE + DB_MAX_OVERFLOW) x WORKERS x
+    # pods must stay under Postgres max_connections; see k8s/configmap.yaml.
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 1
+    # Server-side limits, in ms. pool_timeout only bounds the wait for a pooled
+    # connection; these stop a query stuck on a lock or a stalled server from
+    # holding a request (and shutdown) open indefinitely.
+    DB_STATEMENT_TIMEOUT_MS: int = 15_000
+    DB_LOCK_TIMEOUT_MS: int = 5_000
+    DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: int = 30_000
+    # uvicorn stops waiting for in-flight requests after this many seconds, so the
+    # lifespan shutdown (engine dispose) still runs before Kubernetes sends SIGKILL.
+    # Keep it above the statement timeout and below terminationGracePeriodSeconds.
+    GRACEFUL_SHUTDOWN_SECONDS: int = 20
 
     CORS_ORIGINS: str = "http://localhost:3000"
 

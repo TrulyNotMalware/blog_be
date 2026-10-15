@@ -23,6 +23,7 @@ def main(env: str, debug: bool) -> None:
         port=loader.config.APP_PORT,
         reload=env != "prod",
         workers=1 if env != "prod" else loader.config.WORKERS,
+        timeout_graceful_shutdown=loader.config.GRACEFUL_SHUTDOWN_SECONDS,
     )
 
 

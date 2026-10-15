@@ -23,6 +23,8 @@ spec:
         app.kubernetes.io/name: blog-app
         app.kubernetes.io/part-of: blog
     spec:
+      # Must exceed GRACEFUL_SHUTDOWN_SECONDS (configmap) plus the lifespan shutdown.
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

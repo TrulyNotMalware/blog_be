@@ -12,6 +12,20 @@ data:
   APP_HOST: "0.0.0.0"
   APP_PORT: "8080"
   WORKERS: "2"
+  # Postgres connections: (DB_POOL_SIZE + DB_MAX_OVERFLOW) x WORKERS x pods must stay
+  # under max_connections (100 by default, 3 of them reserved for superusers, plus the
+  # backup job). At HPA max 6 + rolling-update surge 1 = 7 pods: (5 + 1) x 2 x 7 = 84.
+  # Raising WORKERS or the HPA maxReplicas means revisiting these.
+  DB_POOL_SIZE: "5"
+  DB_MAX_OVERFLOW: "1"
+  # Server-side limits (ms): a query stuck on a lock or a stalled DB fails instead of
+  # holding the request and pod shutdown open. Keep the statement timeout below
+  # GRACEFUL_SHUTDOWN_SECONDS.
+  DB_STATEMENT_TIMEOUT_MS: "15000"
+  DB_LOCK_TIMEOUT_MS: "5000"
+  DB_IDLE_IN_TRANSACTION_TIMEOUT_MS: "30000"
+  # Must stay below the pod's terminationGracePeriodSeconds (deployment.yaml).
+  GRACEFUL_SHUTDOWN_SECONDS: "20"
   # CORS / SecurityHeaders / RateLimit are handled by the gateway in prod. Kept here for non-prod compatibility.
   CORS_ORIGINS: "https://blog.example.com"
   # Signing algorithm is pinned to RS256 in code (app/core/config/config.py); not a ConfigMap knob.
