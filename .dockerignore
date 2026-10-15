@@ -18,8 +18,7 @@ htmlcov/
 .omc/
 .claude/
 .env
-.env.local
-.env.*.local
+.env.*
 
 docs/
 tests/

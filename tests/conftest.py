@@ -1,9 +1,10 @@
 """Smoke / unit test fixtures.
 
 Integration tests live under `tests/integration/` and are skipped when
-`TEST_DATABASE_URL` is not set. Run them explicitly with:
+`TEST_DATABASE_URL` is not set. They TRUNCATE every table before each test, so
+point them at a dedicated database, never the one the app uses:
 
-    TEST_DATABASE_URL=postgresql+asyncpg://blog:blog@localhost:5432/blog \
+    TEST_DATABASE_URL=postgresql+asyncpg://blog:blog@localhost:5432/blog_test \
         pytest -m integration
 """
 
