@@ -103,6 +103,8 @@ class PostService:
         if tags_update is not None:
             names = [normalize_tag(t) for t in tags_update]
             post.tags = list(await self.tag_repo.ensure(names))
+            # A tags-only change writes post_tags alone, so onupdate never fires.
+            post.updated_at = datetime.now(tz=UTC)
         if new_id is not None and new_id != post_id:
             if await self.post_repo.exists(new_id):
                 raise SlugConflict(new_id)
@@ -123,5 +125,11 @@ class PostService:
 
 
 @lru_cache
-def get_post_service() -> PostService:
+def _post_service() -> PostService:
     return PostService()
+
+
+async def get_post_service() -> PostService:
+    # async def: a plain def dependency runs in the threadpool, where every
+    # request would queue behind bcrypt logins.
+    return _post_service()

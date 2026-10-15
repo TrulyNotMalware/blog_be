@@ -153,6 +153,21 @@ async def test_patch_null_content_clears_it(
     assert r.json()["content"] is None
 
 
+async def test_patch_tags_only_bumps_updated_at(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x"))
+    before = (await client.get("/v1/admin/posts/x", headers=auth_headers)).json()
+    r = await client.patch("/v1/posts/x", json={"tags": ["z"]}, headers=auth_headers)
+    assert r.status_code == 200
+    assert dt.datetime.fromisoformat(r.json()["updatedAt"]) > dt.datetime.fromisoformat(
+        before["updatedAt"]
+    )
+
+
 async def test_patch_404(
     client: AsyncClient,
     auth_headers: dict[str, str],

@@ -31,5 +31,11 @@ class TagService:
 
 
 @lru_cache
-def get_tag_service() -> TagService:
+def _tag_service() -> TagService:
     return TagService()
+
+
+async def get_tag_service() -> TagService:
+    # async def: a plain def dependency runs in the threadpool, where every
+    # request would queue behind bcrypt logins.
+    return _tag_service()

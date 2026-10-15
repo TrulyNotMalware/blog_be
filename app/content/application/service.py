@@ -43,5 +43,11 @@ class ContentService:
 
 
 @lru_cache
-def get_content_service() -> ContentService:
+def _content_service() -> ContentService:
     return ContentService()
+
+
+async def get_content_service() -> ContentService:
+    # async def: a plain def dependency runs in the threadpool, where every
+    # request would queue behind bcrypt logins.
+    return _content_service()
