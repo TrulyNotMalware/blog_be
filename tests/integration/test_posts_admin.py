@@ -88,6 +88,33 @@ async def test_patch_replaces_tags(
     assert sorted(r.json()["tags"]) == ["alpha", "beta"]
 
 
+async def test_patch_null_on_required_field_returns_422(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x", title="Old"))
+    r = await client.patch("/v1/posts/x", json={"title": None}, headers=auth_headers)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    r = await client.get("/v1/admin/posts/x", headers=auth_headers)
+    assert r.json()["title"] == "Old"
+
+
+async def test_patch_null_content_clears_it(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x", content="body"))
+    r = await client.patch("/v1/posts/x", json={"content": None}, headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["content"] is None
+
+
 async def test_patch_404(
     client: AsyncClient,
     auth_headers: dict[str, str],

@@ -80,6 +80,17 @@ class PostUpdate(_Camel):
     featured: bool | None = None
     status: PostStatus | None = None
 
+    @field_validator(
+        "title", "excerpt", "date", "read_time", "kind", "featured", "status"
+    )
+    @classmethod
+    def _reject_null(cls, v: object) -> object:
+        # Runs only for fields the client sent. An explicit null for these NOT NULL
+        # columns would otherwise fail at flush time as an IntegrityError (500).
+        if v is None:
+            raise ValueError("must not be null")
+        return v
+
 
 class PostNavItem(_Camel):
     """Minimal post shape used in prev/next nav."""
