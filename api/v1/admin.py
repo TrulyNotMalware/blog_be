@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import PageQuery, PageSizeQuery, PaginatedResponse
 from app.core.security.auth import require_admin
 from app.post.application.schemas import PostAdmin, PostKind, PostStatus
 from app.post.application.service import PostService, get_post_service
@@ -20,8 +20,8 @@ ServiceDep = Annotated[PostService, Depends(get_post_service)]
 async def list_admin_posts(
     service: ServiceDep,
     _: Annotated[str, Depends(require_admin)],
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=100, alias="pageSize"),
+    page: PageQuery = 1,
+    page_size: PageSizeQuery = 10,
     tag: str | None = None,
     kind: PostKind | None = None,
     status: PostStatus | None = None,

@@ -1,8 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import PageQuery, PageSizeQuery, PaginatedResponse
 from app.core.security.auth import require_admin
 from app.post.application.schemas import (
     PostAdmin,
@@ -31,8 +31,8 @@ ServiceDep = Annotated[PostService, Depends(get_post_service)]
 async def list_posts(
         response: Response,
         service: ServiceDep,
-        page: int = Query(1, ge=1),
-        page_size: int = Query(10, ge=1, le=100, alias="pageSize"),
+        page: PageQuery = 1,
+        page_size: PageSizeQuery = 10,
         tag: str | None = None,
         kind: PostKind | None = None,
 ) -> PaginatedResponse[PostPublic]:
