@@ -5,7 +5,8 @@ from app.content.application.schemas import ContentRead
 from app.content.domain.entity import SiteContent
 from app.content.infrastructure.repository import ContentRepository
 from app.core.db.transactional import Transactional
-from app.core.exception.error_base import ContentNotFound
+from app.core.exception.codes import ErrorCode
+from app.core.exception.error_base import ContentNotFound, CustomException
 
 _MAX_CONTENT_BYTES = 64 * 1024  # 64 KB
 
@@ -24,7 +25,11 @@ class ContentService:
     async def upsert(self, key: str, content: dict[str, object]) -> ContentRead:
         serialized = json.dumps(content, ensure_ascii=False)
         if len(serialized.encode()) > _MAX_CONTENT_BYTES:
-            raise ValueError("content exceeds 64 KB limit")
+            raise CustomException(
+                ErrorCode.VALIDATION_ERROR,
+                "content exceeds 64 KB limit",
+                422,
+            )
         row = await self.repo.upsert(key, content)
         return ContentRead.model_validate(row)
 
