@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
@@ -64,7 +65,11 @@ async def login(payload: LoginRequest) -> TokenPair:
     # Always run bcrypt regardless of username match to prevent timing oracle.
     username_ok = payload.username == cfg.ADMIN_USERNAME
     expected_hash = cfg.ADMIN_PASSWORD_HASH if username_ok else _DUMMY_HASH
-    if not verify_password(payload.password, expected_hash) or not username_ok:
+    # bcrypt is CPU-bound (~200 ms); on the event loop it would stall every request.
+    password_ok = await run_in_threadpool(
+        verify_password, payload.password, expected_hash
+    )
+    if not password_ok or not username_ok:
         raise Unauthorized("Invalid credentials")
     admin = await upsert_admin(
         username=cfg.ADMIN_USERNAME,
