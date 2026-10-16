@@ -1,4 +1,3 @@
-import json
 import re
 from typing import Annotated
 
@@ -14,13 +13,13 @@ router = APIRouter(prefix="/content", tags=["content"])
 
 _PUBLIC_CACHE = "public, max-age=60, stale-while-revalidate=300"
 _KEY_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
-_MAX_CONTENT_BYTES = 64 * 1024
 
 ServiceDep = Annotated[ContentService, Depends(get_content_service)]
 
 
 def _validate_key(key: str) -> None:
-    if not _KEY_RE.match(key):
+    # fullmatch: with match(), `$` also matches before a trailing "\n".
+    if not _KEY_RE.fullmatch(key):
         raise CustomException(
             ErrorCode.VALIDATION_ERROR,
             f"Invalid content key: '{key}'. Must match ^[a-z0-9][a-z0-9_-]{{0,63}}$",
@@ -55,11 +54,4 @@ async def put_content(
     _admin: Annotated[str, Depends(require_admin)],
 ) -> ContentRead:
     _validate_key(key)
-    serialized = json.dumps(body.content, ensure_ascii=False)
-    if len(serialized.encode()) > _MAX_CONTENT_BYTES:
-        raise CustomException(
-            ErrorCode.VALIDATION_ERROR,
-            "content exceeds 64 KB limit",
-            422,
-        )
     return await service.upsert(key, body.content)

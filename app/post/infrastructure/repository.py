@@ -170,7 +170,7 @@ class PostRepository:
 
         items_stmt = (
             base.add_columns(score_expr.label("score"))
-            .order_by(desc("score"), desc(Post.date))
+            .order_by(desc("score"), desc(Post.date), Post.id)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )

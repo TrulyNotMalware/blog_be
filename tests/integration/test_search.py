@@ -118,3 +118,22 @@ async def test_pagination(
     assert len(b2["items"]) == 2
     assert b1["hasNext"] is True
     assert b2["hasNext"] is False
+
+
+async def test_pagination_is_stable_when_score_and_date_tie(
+    client: AsyncClient,
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    # Equal (score, date) rows have no defined order in Postgres; without a unique
+    # tiebreaker, LIMIT/OFFSET pages repeated some posts and skipped others.
+    ids = [f"p{i:03d}" for i in range(200)]
+    await insert(*(make_post(id=i, title="tie post") for i in ids))
+    seen: list[str] = []
+    for page in range(1, 11):
+        r = await client.get(
+            "/v1/search", params={"q": "tie", "pageSize": 20, "page": page}
+        )
+        assert r.status_code == 200
+        seen.extend(item["id"] for item in r.json()["items"])
+    assert seen == ids

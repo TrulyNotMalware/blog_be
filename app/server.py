@@ -1,11 +1,12 @@
+import hmac
 import time
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware import Middleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -38,16 +39,17 @@ class LoginRateLimitMiddleware(BaseHTTPMiddleware):
         self._window = window_seconds
         self._attempts: dict[str, list[float]] = {}
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         if request.url.path.endswith("/auth/login") and request.method == "POST":
             # In-process limiter — resets on restart and does not coordinate across
             # workers. Keep WORKERS=1 in prod or move to Redis.
-            xff = request.headers.get("x-forwarded-for")
-            if xff:
-                ip = xff.split(",")[-1].strip() or "unknown"
-            else:
-                ip = (request.client.host if request.client else None) or "unknown"
-            now = time.time()
+            # Keyed on the peer address: uvicorn already resolves X-Forwarded-For
+            # from trusted proxies (--forwarded-allow-ips). Reading the header here
+            # would let a direct caller pick a fresh bucket for every attempt.
+            ip = (request.client.host if request.client else None) or "unknown"
+            now = time.monotonic()
             window = [t for t in self._attempts.get(ip, []) if now - t < self._window]
             if len(window) >= self._max:
                 return JSONResponse(
@@ -62,7 +64,9 @@ class LoginRateLimitMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Local/test only — in prod the gateway sets these headers."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
@@ -97,7 +101,9 @@ class GatewaySharedSecretMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._expected = expected_secret
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         if not self._expected:
             return await call_next(request)
         if request.url.path in self.PROBE_PATHS:
@@ -114,7 +120,6 @@ class GatewaySharedSecretMiddleware(BaseHTTPMiddleware):
 
 def _constant_time_equal(a: str, b: str) -> bool:
     """Constant-time string compare to defend against timing oracles."""
-    import hmac
     return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
 
 
@@ -151,7 +156,7 @@ def init_middleware() -> list[Middleware]:
                     CORSMiddleware,
                     allow_origins=cfg.cors_origins_list,
                     allow_credentials=True,
-                    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+                    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
                     allow_headers=["Authorization", "Content-Type"],
                 ),
                 Middleware(SecurityHeadersMiddleware),

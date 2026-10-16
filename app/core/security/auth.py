@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 import jwt
@@ -73,6 +73,8 @@ def decode_token(token: str) -> dict[str, Any]:
             algorithms=[JWT_ALGORITHM],
             issuer=cfg.JWT_ISSUER,
             audience=cfg.JWT_AUDIENCE,
+            # PyJWT accepts a token without `exp` as valid forever.
+            options={"require": ["exp", "iat", "sub"]},
         )
     except jwt.PyJWTError as e:
         raise Unauthorized("Invalid or expired token") from e
@@ -107,7 +109,7 @@ async def _verify_subject(payload: dict[str, Any], expected_type: TokenType) -> 
 
 async def require_admin(
     request: Request,
-    creds: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> str:
     """Admin authentication.
 

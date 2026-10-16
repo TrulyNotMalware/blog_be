@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapper, Session
 
+from app.core.config.config import loader
+
 
 class Base(DeclarativeBase):
     pass
@@ -35,11 +37,23 @@ def reset_session_context(context: Token[str]) -> None:
 
 
 def init_engines(database_url: str, *, echo: bool = False) -> None:
+    cfg = loader.config
     engines[ENGINE_NAME] = create_async_engine(
         database_url,
         echo=echo,
         pool_pre_ping=True,
         pool_recycle=3600,
+        pool_size=cfg.DB_POOL_SIZE,
+        max_overflow=cfg.DB_MAX_OVERFLOW,
+        connect_args={
+            "server_settings": {
+                "statement_timeout": str(cfg.DB_STATEMENT_TIMEOUT_MS),
+                "lock_timeout": str(cfg.DB_LOCK_TIMEOUT_MS),
+                "idle_in_transaction_session_timeout": str(
+                    cfg.DB_IDLE_IN_TRANSACTION_TIMEOUT_MS
+                ),
+            },
+        },
     )
 
 

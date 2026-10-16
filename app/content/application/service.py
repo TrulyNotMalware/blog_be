@@ -5,7 +5,8 @@ from app.content.application.schemas import ContentRead
 from app.content.domain.entity import SiteContent
 from app.content.infrastructure.repository import ContentRepository
 from app.core.db.transactional import Transactional
-from app.core.exception.error_base import ContentNotFound
+from app.core.exception.codes import ErrorCode
+from app.core.exception.error_base import ContentNotFound, CustomException
 
 _MAX_CONTENT_BYTES = 64 * 1024  # 64 KB
 
@@ -22,13 +23,31 @@ class ContentService:
 
     @Transactional()
     async def upsert(self, key: str, content: dict[str, object]) -> ContentRead:
-        serialized = json.dumps(content, ensure_ascii=False)
+        try:
+            # The request parser accepts NaN/Infinity, but JSONB rejects them (500).
+            serialized = json.dumps(content, ensure_ascii=False, allow_nan=False)
+        except ValueError as exc:
+            raise CustomException(
+                ErrorCode.VALIDATION_ERROR,
+                "content must not contain NaN or Infinity",
+                422,
+            ) from exc
         if len(serialized.encode()) > _MAX_CONTENT_BYTES:
-            raise ValueError("content exceeds 64 KB limit")
+            raise CustomException(
+                ErrorCode.VALIDATION_ERROR,
+                "content exceeds 64 KB limit",
+                422,
+            )
         row = await self.repo.upsert(key, content)
         return ContentRead.model_validate(row)
 
 
 @lru_cache
-def get_content_service() -> ContentService:
+def _content_service() -> ContentService:
     return ContentService()
+
+
+async def get_content_service() -> ContentService:
+    # async def: a plain def dependency runs in the threadpool, where every
+    # request would queue behind bcrypt logins.
+    return _content_service()

@@ -1,3 +1,4 @@
+import datetime as dt
 from collections.abc import Awaitable, Callable
 
 from httpx import AsyncClient
@@ -88,6 +89,85 @@ async def test_patch_replaces_tags(
     assert sorted(r.json()["tags"]) == ["alpha", "beta"]
 
 
+async def test_patch_null_on_required_field_returns_422(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x", title="Old"))
+    r = await client.patch("/v1/posts/x", json={"title": None}, headers=auth_headers)
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    r = await client.get("/v1/admin/posts/x", headers=auth_headers)
+    assert r.json()["title"] == "Old"
+
+
+async def test_create_with_tags_equal_after_normalization(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+) -> None:
+    payload = {**_BASE_PAYLOAD, "tags": ["Python", "python"]}
+    r = await client.post("/v1/posts", json=payload, headers=auth_headers)
+    assert r.status_code == 201, r.text
+    assert r.json()["tags"] == ["python"]
+
+
+async def test_patch_with_repeated_tags(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x"))
+    r = await client.patch(
+        "/v1/posts/x", json={"tags": ["a", "a"]}, headers=auth_headers
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["tags"] == ["a"]
+
+
+async def test_patch_empty_id_returns_422(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x"))
+    r = await client.patch("/v1/posts/x", json={"id": ""}, headers=auth_headers)
+    assert r.status_code == 422
+    r = await client.get("/v1/admin/posts/x", headers=auth_headers)
+    assert r.status_code == 200
+
+
+async def test_patch_null_content_clears_it(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x", content="body"))
+    r = await client.patch("/v1/posts/x", json={"content": None}, headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["content"] is None
+
+
+async def test_patch_tags_only_bumps_updated_at(
+    client: AsyncClient,
+    auth_headers: dict[str, str],
+    insert: _Insert,
+    make_post: _MakePost,
+) -> None:
+    await insert(make_post(id="x"))
+    before = (await client.get("/v1/admin/posts/x", headers=auth_headers)).json()
+    r = await client.patch("/v1/posts/x", json={"tags": ["z"]}, headers=auth_headers)
+    assert r.status_code == 200
+    assert dt.datetime.fromisoformat(r.json()["updatedAt"]) > dt.datetime.fromisoformat(
+        before["updatedAt"]
+    )
+
+
 async def test_patch_404(
     client: AsyncClient,
     auth_headers: dict[str, str],
@@ -116,11 +196,14 @@ async def test_publish_transitions_status(
     insert: _Insert,
     make_post: _MakePost,
 ) -> None:
-    await insert(make_post(id="x", status="draft"))
+    await insert(make_post(id="x", status="draft", date=dt.date(2020, 1, 1)))
+    before = dt.datetime.now(tz=dt.UTC).date()
     body = (
         await client.post("/v1/posts/x/publish", headers=auth_headers)
     ).json()
+    after = dt.datetime.now(tz=dt.UTC).date()
     assert body["status"] == "published"
+    assert body["date"] in {before.isoformat(), after.isoformat()}
 
 
 async def test_admin_response_includes_admin_only_fields(

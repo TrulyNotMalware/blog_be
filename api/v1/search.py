@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.pagination import PaginatedResponse
+from app.core.pagination import PageQuery, PageSizeQuery, PaginatedResponse
 from app.post.application.schemas import PostPublic
 from app.post.application.service import PostService, get_post_service
 
@@ -19,8 +19,8 @@ ServiceDep = Annotated[PostService, Depends(get_post_service)]
 async def search_posts(
     service: ServiceDep,
     q: Annotated[str, Query(min_length=1, max_length=100)],
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    page: PageQuery = 1,
+    page_size: PageSizeQuery = 20,
 ) -> PaginatedResponse[PostPublic]:
     items, total = await service.search(q=q, page=page, page_size=page_size)
     return PaginatedResponse[PostPublic].build(

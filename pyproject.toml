@@ -17,6 +17,7 @@ select = [
     "S",
     "PT",
     "ASYNC",
+    "FAST",
     "RUF",
     "RET",
     "TRY",
