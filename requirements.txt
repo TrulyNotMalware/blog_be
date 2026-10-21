@@ -1,6 +1,6 @@
 fastapi==0.138.0
 pydantic==2.13.4
-pydantic-settings==2.14.2
+pydantic-settings==2.16.0
 SQLAlchemy==2.0.51
 greenlet==3.5.2
 asyncpg==0.31.0
